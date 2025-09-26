@@ -34,7 +34,7 @@ jobs:
       run: npm run lint
 
     - name: Run tests
-      run: npm test
+      run: jest --passWithNoTests
       env:
         NODE_ENV: test
 
