@@ -30,7 +30,7 @@ jobs:
     - name: Install test tools
       run: |
         npm install -g eslint
-        npm install --save-dev jest supertest --no-save
+        npm install --save-dev jest supertest 
 
     - name: Run linting
       run: eslint app/ test/
