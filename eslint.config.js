@@ -1,5 +1,3 @@
-const js = require('eslint-plugin-js');
-
 module.exports = [
     {
         files: ['**/*.js'],
