@@ -1,6 +1,6 @@
-import js from 'eslint-plugin-js';
+const js = require('eslint-plugin-js');
 
-export default [
+module.exports = [
     {
         files: ['**/*.js'],
         languageOptions: {
@@ -17,11 +17,7 @@ export default [
                 describe: 'readonly',
                 it: 'readonly',
                 test: 'readonly',
-                expect: 'readonly',
-                beforeAll: 'readonly',
-                afterAll: 'readonly',
-                beforeEach: 'readonly',
-                afterEach: 'readonly'
+                expect: 'readonly'
             }
         },
         rules: {
