@@ -28,10 +28,12 @@ jobs:
       run: npm ci --only=production
     
     - name: Install test tools
-      run: npm install -g eslint jest supertest
+      run: |
+        npm install -g eslint
+        npm install --save-dev jest supertest --no-save
 
     - name: Run linting
-      run: npm run lint
+      run: eslint app/ test/
 
     - name: Run tests
       run: jest --passWithNoTests
@@ -40,7 +42,7 @@ jobs:
 
     - name: Build Docker image
       run: |
-        docker build -t my-node-app:ci-${{ github.sha }} .
+          docker build -t my-node-app:ci-${{ github.sha }} .
 
   security-scan:
     runs-on: ubuntu-latest
