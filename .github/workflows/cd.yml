@@ -63,7 +63,7 @@ jobs:
       with:
         registry: ghcr.io
         username: ${{ github.repository_owner }}  # ваш username
-        password: ${{ secrets.GHCR_TOKEN }}  # ← используйте PAT    
+        password: ${{ secrets.GHCR_TOKEN }}    
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
