@@ -36,7 +36,7 @@ jobs:
       run: eslint app/ test/
 
     - name: Run tests
-      run: jest --passWithNoTests
+      run: npx jest --passWithNoTests
       env:
         NODE_ENV: test
 
