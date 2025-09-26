@@ -28,7 +28,7 @@ jobs:
       run: npm ci --only=production
     
     - name: Install test tools
-      run: npm install -g eslint jest
+      run: npm install -g eslint jest supertest
 
     - name: Run linting
       run: npm run lint
