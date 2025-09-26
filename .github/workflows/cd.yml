@@ -77,21 +77,19 @@ jobs:
 
     - name: Deploy to K3s
       run: |
-        chmod 400 ${{ secrets.SSH_PRIVATE_KEY }}
-        ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} \
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key.pem
+        chmod 600 private_key.pem
+        
+        ssh -o StrictHostKeyChecking=no -i private_key.pem \
           ${{ secrets.SSH_USER }}@${{ secrets.K3S_SERVER }} '
-          # Update Kubernetes manifests
           cd /opt/k8s/my-node-app
-          
-          # Update image tag in deployment
-          sed -i "s|image:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}|" kustomization.yaml
-          
-          # Apply changes
-          kubectl apply -k . --namespace=default
-          
-          # Wait for rollout to complete
-          kubectl rollout status deployment/my-node-app --namespace=default --timeout=300s
+          kubectl set image deployment/my-node-app my-node-app=ghcr.io/${{ github.repository_owner }}/my-node-app:latest
+          kubectl rollout status deployment/my-node-app --timeout=300s
         '
+        
+        # Удаляем временный файл
+        rm -f private_key.pem
+        
 
   health-check:
     runs-on: ubuntu-latest
