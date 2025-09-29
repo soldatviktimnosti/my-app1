@@ -82,10 +82,12 @@ jobs:
         echo "SSH_KEY length: ${#SSH_KEY}"  # Проверим длину ключа
       env:
         SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        
+
   deploy:
     runs-on: self-hosted
     needs: build-and-push
+  
+    steps:
 
     - name: Deploy to K3s
       run: |
