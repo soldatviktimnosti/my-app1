@@ -91,18 +91,9 @@ jobs:
 
     - name: Deploy to K3s
       run: |
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key.pem
-        chmod 600 private_key.pem
-        
-        ssh -o StrictHostKeyChecking=no -i private_key.pem \
-          ${{ secrets.SSH_USER }}@${{ secrets.K3S_SERVER }} '
-          cd /opt/k8s/my-node-app
-          kubectl set image deployment/my-node-app my-node-app=ghcr.io/${{ github.repository_owner }}/my-node-app:latest
-          kubectl rollout status deployment/my-node-app --timeout=300s
-        '
-        
-        # Удаляем временный файл
-        rm -f private_key.pem
+        cd /opt/k8s/my-node-app
+        kubectl set image deployment/my-node-app my-node-app=ghcr.io/${{ github.repository }}:latest
+        kubectl rollout status deployment/my-node-app --timeout=300s
         
 
   health-check:
