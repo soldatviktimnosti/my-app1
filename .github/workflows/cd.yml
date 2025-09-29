@@ -11,7 +11,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on:  self-hosted 
     if: github.event_name == 'push' || github.event_name == 'release'
     
@@ -82,6 +82,10 @@ jobs:
         echo "SSH_KEY length: ${#SSH_KEY}"  # Проверим длину ключа
       env:
         SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        
+  deploy:
+    runs-on: self-hosted
+    needs: build-and-push
 
     - name: Deploy to K3s
       run: |
