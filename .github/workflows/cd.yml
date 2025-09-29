@@ -85,7 +85,7 @@ jobs:
 
   deploy:
     runs-on: self-hosted
-    needs: build-and-push
+    needs: build
   
     steps:
 
@@ -107,7 +107,7 @@ jobs:
 
   health-check:
     runs-on: ubuntu-latest
-    needs: build-and-deploy
+    needs: build
     if: always()
     
     steps:
