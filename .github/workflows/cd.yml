@@ -104,28 +104,39 @@ jobs:
         kubectl logs -l run=test-pod --tail=20 2>/dev/null || echo "No logs available"
         kubectl delete pod test-pod 2>/dev/null || true
 
-    - name: Deploy with detailed debugging
+    - name: Complete deployment with cleanup
       run: |
-        # Создаем деплоймент
+        # Очистка
+        echo "🧹 Cleaning up previous deployment..."
+        kubectl delete all -l app=my-node-app 2>/dev/null || echo "Nothing to clean up"
+        sleep 5
+        
+        # Тестируем доступность образа
+        echo "🔍 Testing image accessibility..."
+        kubectl run test-pod --image=ghcr.io/${{ github.repository }}:latest --restart=Never --command -- sleep 3600
+        
+        # Мониторим статус тестового пода
+        for i in {1..12}; do
+          STATUS=$(kubectl get pod test-pod -o jsonpath='{.status.phase}' 2>/dev/null || echo "Missing")
+          echo "Test pod status: $STATUS (attempt $i)"
+          
+          if [ "$STATUS" = "Running" ]; then
+            echo "✅ Image is accessible!"
+            kubectl delete pod test-pod
+            break
+          elif [ "$STATUS" = "ImagePullBackOff" ] || [ "$STATUS" = "ErrImagePull" ]; then
+            echo "❌ Cannot pull image from GHCR"
+            kubectl describe pod test-pod
+            kubectl logs test-pod 2>/dev/null || echo "No logs"
+            kubectl delete pod test-pod
+            exit 1
+          fi
+          sleep 5
+        done
+        
+        # Создаем основное приложение
+        echo "🚀 Deploying main application..."
         kubectl create deployment my-node-app --image=ghcr.io/${{ github.repository }}:latest
-        
-        # Даем время на запуск
-        sleep 30
-        
-        # Диагностика
-        echo "=== Deployment status ==="
-        kubectl get deployment my-node-app
-        
-        echo "=== Pod status ==="
-        kubectl get pods -l app=my-node-app
-        
-        echo "=== Pod details ==="
-        kubectl describe pods -l app=my-node-app
-        
-        echo "=== Pod logs ==="
-        kubectl logs -l app=my-node-app --tail=50 || echo "No logs available yet"
-        
-        # Создаем сервис
         kubectl expose deployment my-node-app --port=3000 --target-port=3000 --type=LoadBalancer --name=my-node-app-service
     
   deploy:
