@@ -143,7 +143,14 @@ jobs:
     - name: Create service and wait
       run: |
         kubectl expose deployment my-node-app --port=3000 --target-port=3000 --type=LoadBalancer --name=my-node-app-service
+        
+        # Принудительное удаление зависших подов
+        echo "Cleaning up terminating pods..."
+        kubectl delete pods -l app=my-node-app --grace-period=0 --force 2>/dev/null || echo "No pods to force delete"
+        
+        # Ждем rollout
         kubectl rollout status deployment/my-node-app --timeout=300s
+        echo "✅ Rollout completed successfully"
 
   health-check:
     runs-on: self-hosted
