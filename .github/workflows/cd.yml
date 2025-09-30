@@ -113,31 +113,31 @@ jobs:
 
 
     steps:
-  - name: Step-by-step deployment
-    run: |
-      echo "=== Step 1: Cleanup ==="
-      kubectl delete deployment my-node-app 2>/dev/null || echo "No deployment to delete"
-      kubectl delete service my-node-app-service 2>/dev/null || echo "No service to delete"
-      sleep 5
-      
-      echo "=== Step 2: Create deployment ==="
-      kubectl create deployment my-node-app --image=ghcr.io/${{ github.repository }}:latest
-      echo "Deployment created successfully"
-      
-      echo "=== Step 3: Wait for pod ==="
-      sleep 30
-      kubectl get pods -l app=my-node-app
-      
-      echo "=== Step 4: Create service ==="
-      kubectl expose deployment my-node-app --port=3000 --target-port=3000 --type=LoadBalancer --name=my-node-app-service
-      echo "Service exposed successfully"
-      
-      echo "=== Step 5: Check service ==="
-      kubectl get service my-node-app-service
-      
-      echo "=== Step 6: Rollout status ==="
-      kubectl rollout status deployment/my-node-app --timeout=300s
-      echo "Rollout completed successfully"
+    - name: Step-by-step deployment
+      run: |
+        echo "=== Step 1: Cleanup ==="
+        kubectl delete deployment my-node-app 2>/dev/null || echo "No deployment to delete"
+        kubectl delete service my-node-app-service 2>/dev/null || echo "No service to delete"
+        sleep 5
+        
+        echo "=== Step 2: Create deployment ==="
+        kubectl create deployment my-node-app --image=ghcr.io/${{ github.repository }}:latest
+        echo "Deployment created successfully"
+        
+        echo "=== Step 3: Wait for pod ==="
+        sleep 30
+        kubectl get pods -l app=my-node-app
+        
+        echo "=== Step 4: Create service ==="
+        kubectl expose deployment my-node-app --port=3000 --target-port=3000 --type=LoadBalancer --name=my-node-app-service
+        echo "Service exposed successfully"
+        
+        echo "=== Step 5: Check service ==="
+        kubectl get service my-node-app-service
+        
+        echo "=== Step 6: Rollout status ==="
+        kubectl rollout status deployment/my-node-app --timeout=300s
+        echo "Rollout completed successfully"
 
   health-check:
     runs-on: self-hosted
