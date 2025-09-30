@@ -88,17 +88,20 @@ jobs:
     needs: build
 
     steps:
-
+    
     - name: Deploy with diagnostics
       run: |
-        # Проверяем доступность образа
-        echo "=== Checking image availability ==="
+        # Проверяем доступность образа в K3s
+        echo "=== Checking image availability in K3s ==="
         kubectl run test-pod --image=ghcr.io/${{ github.repository }}:latest --restart=Never --command -- sleep 3600 || echo "Image pull failed"
         
         # Ждем и проверяем статус пода
         sleep 10
         kubectl get pods -l run=test-pod -o wide
         kubectl describe pod -l run=test-pod
+        
+        # Проверяем логи если под упал
+        kubectl logs -l run=test-pod --tail=20 2>/dev/null || echo "No logs available"
         kubectl delete pod test-pod 2>/dev/null || true
 
     - name: Deploy with detailed debugging
@@ -124,14 +127,7 @@ jobs:
         
         # Создаем сервис
         kubectl expose deployment my-node-app --port=3000 --target-port=3000 --type=LoadBalancer --name=my-node-app-service
-
-    - name: Check image pull permissions
-      run: |
-        # Пробуем скачать образ напрямую на runner
-        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-        docker pull ghcr.io/${{ github.repository }}:latest
-        docker images | grep ${{ github.repository }}
-
+    
   deploy:
     runs-on: self-hosted
     needs: pre-deploy
