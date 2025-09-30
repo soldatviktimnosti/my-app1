@@ -110,9 +110,6 @@ jobs:
     needs: pre-deploy
   
     steps:
-
-
-    steps:
     - name: Step-by-step deployment
       run: |
         echo "=== Step 1: Cleanup ==="
