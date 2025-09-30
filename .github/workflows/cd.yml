@@ -159,9 +159,9 @@ jobs:
         
 
   health-check:
-  runs-on: self-hosted
-  needs: deploy
-  if: always()
+    runs-on: self-hosted
+    needs: deploy
+    if: always()
   
   steps:
   - name: Get application URL
