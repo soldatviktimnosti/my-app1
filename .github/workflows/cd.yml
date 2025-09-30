@@ -104,40 +104,6 @@ jobs:
         kubectl logs -l run=test-pod --tail=20 2>/dev/null || echo "No logs available"
         kubectl delete pod test-pod 2>/dev/null || true
 
-    - name: Complete deployment with cleanup
-      run: |
-        # Очистка
-        echo "🧹 Cleaning up previous deployment..."
-        kubectl delete all -l app=my-node-app 2>/dev/null || echo "Nothing to clean up"
-        sleep 5
-        
-        # Тестируем доступность образа
-        echo "🔍 Testing image accessibility..."
-        kubectl run test-pod --image=ghcr.io/${{ github.repository }}:latest --restart=Never --command -- sleep 3600
-        
-        # Мониторим статус тестового пода
-        for i in {1..12}; do
-          STATUS=$(kubectl get pod test-pod -o jsonpath='{.status.phase}' 2>/dev/null || echo "Missing")
-          echo "Test pod status: $STATUS (attempt $i)"
-          
-          if [ "$STATUS" = "Running" ]; then
-            echo "✅ Image is accessible!"
-            kubectl delete pod test-pod
-            break
-          elif [ "$STATUS" = "ImagePullBackOff" ] || [ "$STATUS" = "ErrImagePull" ]; then
-            echo "❌ Cannot pull image from GHCR"
-            kubectl describe pod test-pod
-            kubectl logs test-pod 2>/dev/null || echo "No logs"
-            kubectl delete pod test-pod
-            exit 1
-          fi
-          sleep 5
-        done
-        
-        # Создаем основное приложение
-        echo "🚀 Deploying main application..."
-        kubectl create deployment my-node-app --image=ghcr.io/${{ github.repository }}:latest
-        kubectl expose deployment my-node-app --port=3000 --target-port=3000 --type=LoadBalancer --name=my-node-app-service
     
   deploy:
     runs-on: self-hosted
@@ -145,25 +111,21 @@ jobs:
   
     steps:
 
-    - name: Deploy using kubectl commands only
+    
+    - name: Cleanup and deploy
       run: |
-        # Проверяем существует ли деплоймент
-        if kubectl get deployment my-node-app > /dev/null 2>&1; then
-          echo "✅ Deployment exists, updating image..."
-          kubectl set image deployment/my-node-app my-node-app=ghcr.io/${{ github.repository }}:latest
-        else
-          echo "🆕 Creating new deployment..."
-          kubectl create deployment my-node-app --image=ghcr.io/${{ github.repository }}:latest
-        fi
+        # Очистка старых ресурсов
+        kubectl delete deployment my-node-app 2>/dev/null || echo "No existing deployment"
+        kubectl delete service my-node-app-service 2>/dev/null || echo "No existing service"
+        sleep 5
         
-        # Проверяем существует ли сервис
-        if ! kubectl get service my-node-app-service > /dev/null 2>&1; then
-          echo "🆕 Creating service..."
-          kubectl expose deployment my-node-app --port=3000 --target-port=3000 --type=LoadBalancer --name=my-node-app-service
-        fi
+        # Создаем новый deployment
+        kubectl create deployment my-node-app --image=ghcr.io/${{ github.repository }}:latest
+        kubectl expose deployment my-node-app --port=3000 --target-port=3000 --type=LoadBalancer --name=my-node-app-service
         
+        # Ждем rollout
         kubectl rollout status deployment/my-node-app --timeout=300s
-        
+        echo "✅ Deployment completed successfully"
 
   health-check:
     runs-on: self-hosted
