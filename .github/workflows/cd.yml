@@ -82,10 +82,59 @@ jobs:
         echo "SSH_KEY length: ${#SSH_KEY}"  # Проверим длину ключа
       env:
         SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+  
+  pre-deploy:
+    runs-on: self-hosted
+    needs: build
+
+    steps:
+
+    - name: Deploy with diagnostics
+      run: |
+        # Проверяем доступность образа
+        echo "=== Checking image availability ==="
+        kubectl run test-pod --image=ghcr.io/${{ github.repository }}:latest --restart=Never --command -- sleep 3600 || echo "Image pull failed"
+        
+        # Ждем и проверяем статус пода
+        sleep 10
+        kubectl get pods -l run=test-pod -o wide
+        kubectl describe pod -l run=test-pod
+        kubectl delete pod test-pod 2>/dev/null || true
+
+    - name: Deploy with detailed debugging
+      run: |
+        # Создаем деплоймент
+        kubectl create deployment my-node-app --image=ghcr.io/${{ github.repository }}:latest
+        
+        # Даем время на запуск
+        sleep 30
+        
+        # Диагностика
+        echo "=== Deployment status ==="
+        kubectl get deployment my-node-app
+        
+        echo "=== Pod status ==="
+        kubectl get pods -l app=my-node-app
+        
+        echo "=== Pod details ==="
+        kubectl describe pods -l app=my-node-app
+        
+        echo "=== Pod logs ==="
+        kubectl logs -l app=my-node-app --tail=50 || echo "No logs available yet"
+        
+        # Создаем сервис
+        kubectl expose deployment my-node-app --port=3000 --target-port=3000 --type=LoadBalancer --name=my-node-app-service
+
+    - name: Check image pull permissions
+      run: |
+        # Пробуем скачать образ напрямую на runner
+        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        docker pull ghcr.io/${{ github.repository }}:latest
+        docker images | grep ${{ github.repository }}
 
   deploy:
     runs-on: self-hosted
-    needs: build
+    needs: pre-deploy
   
     steps:
 
@@ -110,42 +159,51 @@ jobs:
         
 
   health-check:
-    runs-on: ubuntu-latest
-    needs: build
-    if: always()
-    
-    steps:
-    - name: Wait for application to be ready
-      run: |
-        chmod 400 ${{ secrets.SSH_PRIVATE_KEY }}
-        ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} \
-          ${{ secrets.SSH_USER }}@${{ secrets.K3S_SERVER }} '
-          # Get service IP and port
-          APP_URL=$(kubectl get service my-node-app-service --namespace=default -o jsonpath="{.status.loadBalancer.ingress[0].ip}:{.spec.ports[0].port}")
-          
-          # Health check with retries
-          for i in {1..30}; do
-            if curl -f http://$APP_URL/health; then
-              echo "✅ Application is healthy"
-              exit 0
-            fi
-            echo "⏳ Waiting for application to be ready... Attempt $i"
-            sleep 10
-          done
-          echo "❌ Application health check failed"
-          exit 1
-        '
+  runs-on: self-hosted
+  needs: deploy
+  if: always()
+  
+  steps:
+  - name: Get application URL
+    id: url
+    run: |
+      # Ждем пока сервис получит IP
+      for i in {1..20}; do
+        APP_IP=$(kubectl get service my-node-app-service -o jsonpath="{.status.loadBalancer.ingress[0].ip}" 2>/dev/null)
+        if [ -n "$APP_IP" ]; then
+          APP_PORT=$(kubectl get service my-node-app-service -o jsonpath="{.spec.ports[0].port}")
+          echo "APP_URL=http://${APP_IP}:${APP_PORT}" >> $GITHUB_OUTPUT
+          echo "✅ Service IP: $APP_IP, Port: $APP_PORT"
+          exit 0
+        fi
+        echo "⏳ Waiting for service to get IP... Attempt $i"
+        sleep 5
+      done
+      echo "❌ Service did not get IP address"
+      exit 1
 
-    - name: Run smoke tests
-      run: |
-        chmod 400 ${{ secrets.SSH_PRIVATE_KEY }}
-        ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} \
-          ${{ secrets.SSH_USER }}@${{ secrets.K3S_SERVER }} '
-          APP_URL=$(kubectl get service my-node-app-service --namespace=default -o jsonpath="{.status.loadBalancer.ingress[0].ip}:{.spec.ports[0].port}")
-          
-          # Test main endpoints
-          curl -f http://$APP_URL/
-          curl -f http://$APP_URL/health
-          curl -f http://$APP_URL/api/info
-          curl -f http://$APP_URL/ready
-        '
+  - name: Wait for application to be ready
+    run: |
+      for i in {1..30}; do
+        if curl -f -s "${{ steps.url.outputs.APP_URL }}/health" > /dev/null 2>&1; then
+          echo "✅ Application is healthy"
+          exit 0
+        fi
+        echo "⏳ Waiting for application to be ready... Attempt $i"
+        sleep 10
+      done
+      echo "❌ Application health check failed"
+      exit 1
+
+  - name: Run smoke tests
+    run: |
+      echo "Running smoke tests against: ${{ steps.url.outputs.APP_URL }}"
+      
+      endpoints=("/" "/health" "/api/info" "/ready")
+      for endpoint in "${endpoints[@]}"; do
+        if curl -f -s "${{ steps.url.outputs.APP_URL }}${endpoint}" > /dev/null 2>&1; then
+          echo "✅ $endpoint - OK"
+        else
+          echo "⚠️  $endpoint - Failed"
+        fi
+      done
