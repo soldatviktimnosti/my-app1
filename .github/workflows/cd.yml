@@ -107,7 +107,7 @@ jobs:
     
   deploy:
     runs-on: self-hosted
-    needs: build  # или pre-deploy, в зависимости от вашей структуры
+    needs: pre-deploy
       
     steps:
     - name: Cleanup previous deployment
@@ -144,6 +144,28 @@ jobs:
         echo "🔗 Creating service..."
         kubectl expose deployment my-node-app --port=3000 --target-port=3000 --type=LoadBalancer --name=my-node-app-service
         echo "✅ Service exposed"
+    
+    - name: Debug pod status
+      run: |
+        echo "🔍 Debugging pod status..."
+        
+        # Ждем 60 секунд и смотрим что происходит
+        for i in {1..12}; do
+          echo "=== Check $i ==="
+          echo "--- Pods ---"
+          kubectl get pods -l app=my-node-app -o wide
+          
+          echo "--- Pod details ---"
+          kubectl describe pods -l app=my-node-app | grep -A 10 -B 5 "Status:\\|State:\\|Reason:\\|Message:\\|Error"
+          
+          echo "--- Pod logs ---"
+          kubectl logs -l app=my-node-app --tail=20 2>/dev/null || echo "No logs available yet"
+          
+          echo "--- Events ---"
+          kubectl get events --field-selector involvedObject.name=$(kubectl get pods -l app=my-node-app -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "none") --sort-by=.lastTimestamp 2>/dev/null || echo "No events"
+          
+          sleep 5
+        done
 
     - name: Wait for rollout
       run: |
