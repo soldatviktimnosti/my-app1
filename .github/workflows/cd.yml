@@ -164,46 +164,48 @@ jobs:
     if: always()
   
   steps:
-  - name: Get application URL
-    id: url
-    run: |
-      # Ждем пока сервис получит IP
-      for i in {1..20}; do
-        APP_IP=$(kubectl get service my-node-app-service -o jsonpath="{.status.loadBalancer.ingress[0].ip}" 2>/dev/null)
-        if [ -n "$APP_IP" ]; then
-          APP_PORT=$(kubectl get service my-node-app-service -o jsonpath="{.spec.ports[0].port}")
-          echo "APP_URL=http://${APP_IP}:${APP_PORT}" >> $GITHUB_OUTPUT
-          echo "✅ Service IP: $APP_IP, Port: $APP_PORT"
-          exit 0
-        fi
-        echo "⏳ Waiting for service to get IP... Attempt $i"
-        sleep 5
-      done
-      echo "❌ Service did not get IP address"
-      exit 1
 
-  - name: Wait for application to be ready
-    run: |
-      for i in {1..30}; do
-        if curl -f -s "${{ steps.url.outputs.APP_URL }}/health" > /dev/null 2>&1; then
-          echo "✅ Application is healthy"
-          exit 0
-        fi
-        echo "⏳ Waiting for application to be ready... Attempt $i"
-        sleep 10
-      done
-      echo "❌ Application health check failed"
-      exit 1
 
-  - name: Run smoke tests
-    run: |
-      echo "Running smoke tests against: ${{ steps.url.outputs.APP_URL }}"
-      
-      endpoints=("/" "/health" "/api/info" "/ready")
-      for endpoint in "${endpoints[@]}"; do
-        if curl -f -s "${{ steps.url.outputs.APP_URL }}${endpoint}" > /dev/null 2>&1; then
-          echo "✅ $endpoint - OK"
-        else
-          echo "⚠️  $endpoint - Failed"
-        fi
-      done
+    - name: Get application URL
+      id: url
+      run: |
+        # Ждем пока сервис получит IP
+        for i in {1..20}; do
+          APP_IP=$(kubectl get service my-node-app-service -o jsonpath="{.status.loadBalancer.ingress[0].ip}" 2>/dev/null)
+          if [ -n "$APP_IP" ]; then
+            APP_PORT=$(kubectl get service my-node-app-service -o jsonpath="{.spec.ports[0].port}")
+            echo "APP_URL=http://${APP_IP}:${APP_PORT}" >> $GITHUB_OUTPUT
+            echo "✅ Service IP: $APP_IP, Port: $APP_PORT"
+            exit 0
+          fi
+          echo "⏳ Waiting for service to get IP... Attempt $i"
+          sleep 5
+        done
+        echo "❌ Service did not get IP address"
+        exit 1
+
+    - name: Wait for application to be ready
+      run: |
+        for i in {1..30}; do
+          if curl -f -s "${{ steps.url.outputs.APP_URL }}/health" > /dev/null 2>&1; then
+            echo "✅ Application is healthy"
+            exit 0
+          fi
+          echo "⏳ Waiting for application to be ready... Attempt $i"
+          sleep 10
+        done
+        echo "❌ Application health check failed"
+        exit 1
+
+    - name: Run smoke tests
+      run: |
+        echo "Running smoke tests against: ${{ steps.url.outputs.APP_URL }}"
+        
+        endpoints=("/" "/health" "/api/info" "/ready")
+        for endpoint in "${endpoints[@]}"; do
+          if curl -f -s "${{ steps.url.outputs.APP_URL }}${endpoint}" > /dev/null 2>&1; then
+            echo "✅ $endpoint - OK"
+          else
+            echo "⚠️  $endpoint - Failed"
+          fi
+        done
