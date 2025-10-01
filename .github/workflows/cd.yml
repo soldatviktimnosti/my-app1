@@ -75,6 +75,15 @@ jobs:
         cache-to: type=gha,mode=max
         no-cache-filters: true
     
+    - name: Debug build output
+      run: |
+        echo "🔍 Debugging build results..."
+        docker images | grep "${{ github.repository }}" || echo "❌ Image not found locally"
+        
+        # Проверим какие теги есть локально
+        echo "Local images:"
+        docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}"
+    
     - name: Debug SSH connection
       run: |
         echo "SSH_USER: ${{ secrets.SSH_USER }}"
