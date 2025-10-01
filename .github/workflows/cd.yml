@@ -75,15 +75,6 @@ jobs:
         cache-to: type=gha,mode=max
         no-cache-filters: true
     
-    - name: Debug build output
-      run: |
-        echo "🔍 Debugging build results..."
-        docker images | grep "${{ github.repository }}" || echo "❌ Image not found locally"
-        
-        # Проверим какие теги есть локально
-        echo "Local images:"
-        docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}"
-    
     - name: Debug SSH connection
       run: |
         echo "SSH_USER: ${{ secrets.SSH_USER }}"
@@ -91,20 +82,6 @@ jobs:
         echo "SSH_KEY length: ${#SSH_KEY}"  # Проверим длину ключа
       env:
         SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-
-    - name: Verify image was pushed
-      run: |
-        echo "🔍 Verifying image can be pulled from GHCR..."
-        
-        # Пробуем скачать образ обратно
-        if docker pull ghcr.io/${{ github.repository }}:latest; then
-          echo "✅ SUCCESS: Image exists in GHCR and can be pulled!"
-          echo "Image: ghcr.io/${{ github.repository }}:latest"
-          docker images | grep "${{ github.repository }}"
-        else
-          echo "❌ FAILED: Cannot pull image from GHCR"
-          exit 1
-        fi
       
   pre-deploy:
     runs-on: self-hosted
@@ -126,6 +103,24 @@ jobs:
         # Проверяем логи если под упал
         kubectl logs -l run=test-pod --tail=20 2>/dev/null || echo "No logs available"
         kubectl delete pod test-pod 2>/dev/null || true
+
+    - name: Verify image in GHCR via API
+      run: |
+        echo "🔍 Checking if image exists in GHCR via API..."
+        
+        # Проверяем через прямой API запрос
+        response=$(curl -s -o /dev/null -w "%{http_code}" \
+          -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
+          "https://ghcr.io/v2/${{ github.repository }}/manifests/latest")
+        
+        if [ "$response" = "200" ]; then
+          echo "✅ SUCCESS: Image exists in GHCR!"
+          echo "URL: https://ghcr.io/v2/${{ github.repository }}/manifests/latest"
+        else
+          echo "❌ FAILED: Image NOT FOUND in GHCR (HTTP $response)"
+          echo "This means the push failed despite build success"
+          exit 1
+        fi
 
     
   deploy:
