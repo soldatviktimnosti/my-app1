@@ -82,7 +82,13 @@ jobs:
         echo "SSH_KEY length: ${#SSH_KEY}"  # Проверим длину ключа
       env:
         SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-  
+        
+    - name: Verify image was pushed
+      run: |
+        echo "✅ Checking that image was pushed to GHCR..."
+        curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          "https://ghcr.io/v2/${{ github.repository }}/tags/list" | jq .
+    
   pre-deploy:
     runs-on: self-hosted
     needs: build
@@ -103,6 +109,21 @@ jobs:
         # Проверяем логи если под упал
         kubectl logs -l run=test-pod --tail=20 2>/dev/null || echo "No logs available"
         kubectl delete pod test-pod 2>/dev/null || true
+
+    - name: Verify image exists in GHCR
+      run: |
+        echo "🔍 Checking if image exists in GHCR..."
+        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+          -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          "https://ghcr.io/v2/${{ github.repository }}/manifests/latest")
+        
+        if [ "$RESPONSE" = "200" ]; then
+          echo "✅ Image exists in GHCR"
+        else
+          echo "❌ Image NOT FOUND in GHCR (HTTP $RESPONSE)"
+          echo "Make sure the build job successfully pushed the image"
+          exit 1
+        fi
 
     
   deploy:
@@ -144,6 +165,14 @@ jobs:
         echo "🔗 Creating service..."
         kubectl expose deployment my-node-app --port=3000 --target-port=3000 --type=LoadBalancer --name=my-node-app-service
         echo "✅ Service exposed"
+
+    - name: Verify GHCR secret
+      run: |
+        echo "🔍 Checking GHCR secret..."
+        kubectl get secret ghcr-secret -o yaml | grep -A 3 -B 3 "dockerconfigjson"
+        
+        # Проверим что secret содержит правильные данные
+        kubectl get secret ghcr-secret -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d | jq .
     
     - name: Debug pod status
       run: |
