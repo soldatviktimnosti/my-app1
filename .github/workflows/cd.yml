@@ -83,11 +83,11 @@ jobs:
         SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
     - name: Verify image was pushed
-    run: |
-      echo "✅ Checking image with GITHUB_TOKEN..."
-      curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-        "https://ghcr.io/v2/${{ github.repository }}/tags/list" | jq .
-    
+      run: |
+        echo "✅ Checking image with GITHUB_TOKEN..."
+        curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          "https://ghcr.io/v2/${{ github.repository }}/tags/list" | jq .
+      
   pre-deploy:
     runs-on: self-hosted
     needs: build
