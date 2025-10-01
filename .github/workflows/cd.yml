@@ -135,6 +135,11 @@ jobs:
     - name: Verify token is valid
       run: |
         echo "🔐 Testing token validity..."
+        
+        # Установка jq
+        echo "📦 Installing jq..."
+        sudo apt-get update && sudo apt-get install -y jq
+        
         response=$(curl -s -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
           "https://api.github.com/user")
         
