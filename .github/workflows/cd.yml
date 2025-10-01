@@ -84,9 +84,17 @@ jobs:
 
     - name: Verify image was pushed
       run: |
-        echo "✅ Checking image with GHCR_PAT..."
-        curl -s -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
-          "https://ghcr.io/v2/${{ github.repository }}/tags/list" | jq .
+        echo "🔍 Verifying image can be pulled from GHCR..."
+        
+        # Пробуем скачать образ обратно
+        if docker pull ghcr.io/${{ github.repository }}:latest; then
+          echo "✅ SUCCESS: Image exists in GHCR and can be pulled!"
+          echo "Image: ghcr.io/${{ github.repository }}:latest"
+          docker images | grep "${{ github.repository }}"
+        else
+          echo "❌ FAILED: Cannot pull image from GHCR"
+          exit 1
+        fi
       
   pre-deploy:
     runs-on: self-hosted
@@ -108,21 +116,6 @@ jobs:
         # Проверяем логи если под упал
         kubectl logs -l run=test-pod --tail=20 2>/dev/null || echo "No logs available"
         kubectl delete pod test-pod 2>/dev/null || true
-
-    - name: Verify image exists in GHCR
-      run: |
-        echo "🔍 Checking if image exists in GHCR..."
-        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-          -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-          "https://ghcr.io/v2/${{ github.repository }}/manifests/latest")
-        
-        if [ "$RESPONSE" = "200" ]; then
-          echo "✅ Image exists in GHCR"
-        else
-          echo "❌ Image NOT FOUND in GHCR (HTTP $RESPONSE)"
-          echo "Make sure the build job successfully pushed the image"
-          exit 1
-        fi
 
     
   deploy:
