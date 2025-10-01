@@ -64,16 +64,44 @@ jobs:
           type=sha,prefix={{branch}}-
     
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        no-cache-filters: true
+    - name: Build and push Docker image with debug
+      run: |
+          echo "🐳 STARTING DOCKER BUILD AND PUSH DEBUG..."
+          
+          # 1. Логин в GHCR
+          echo "🔐 Step 1: Logging into GHCR..."
+          echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          
+          # 2. Сборка образа
+          echo "🔨 Step 2: Building image..."
+          docker build -t ghcr.io/${{ github.repository }}:latest .
+          
+          # 3. Проверка локального образа
+          echo "📋 Step 3: Verifying local image..."
+          docker images | grep "${{ github.repository }}" || echo "❌ Image not found locally"
+          
+          # 4. Push с подробным выводом
+          echo "🚀 Step 4: Pushing to GHCR..."
+          docker push ghcr.io/${{ github.repository }}:latest
+          
+          # 5. Проверка кода завершения push
+          PUSH_EXIT_CODE=$?
+          if [ $PUSH_EXIT_CODE -eq 0 ]; then
+            echo "✅ Step 4: Push command completed successfully"
+          else
+            echo "❌ Step 4: Push command failed with exit code: $PUSH_EXIT_CODE"
+            exit 1
+          fi
+          
+          # 6. Немедленная проверка через pull
+          echo "🔍 Step 5: Immediate verification via pull..."
+          if docker pull ghcr.io/${{ github.repository }}:latest; then
+            echo "🎉 SUCCESS: Image successfully pushed and verified in GHCR!"
+            echo "Image: ghcr.io/${{ github.repository }}:latest"
+          else
+            echo "💥 CRITICAL: Image pushed but cannot be pulled - check GHCR"
+            exit 1
+          fi
     
     - name: Debug SSH connection
       run: |
@@ -104,6 +132,28 @@ jobs:
         kubectl logs -l run=test-pod --tail=20 2>/dev/null || echo "No logs available"
         kubectl delete pod test-pod 2>/dev/null || true
 
+    - name: Verify token is valid
+      run: |
+        echo "🔐 Testing token validity..."
+        response=$(curl -s -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
+          "https://api.github.com/user")
+        
+        if echo "$response" | grep -q "login"; then
+          username=$(echo "$response" | jq -r '.login')
+          echo "✅ Token valid - user: $username"
+        else
+          echo "❌ Token invalid: $response"
+          exit 1
+        fi
+    
+    - name: Check package visibility
+      run: |
+        echo "👀 Checking package visibility..."
+        # Если пакет приватный, могут быть дополнительные ограничения
+        curl -s -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
+          "https://api.github.com/user/packages/container/${{ github.repository }}" | jq .
+
+    
     - name: Verify image in GHCR via API
       run: |
         echo "🔍 Checking if image exists in GHCR via API..."
