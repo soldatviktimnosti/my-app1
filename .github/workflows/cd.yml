@@ -158,31 +158,42 @@ jobs:
         curl -s -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
           "https://api.github.com/user/packages/container/${{ github.repository }}" | jq .
 
-    - name: Final GHCR access test
+    - name: Final GHCR access test without docker
       run: |
-        echo "🔍 FINAL GHCR ACCESS TEST"
-        echo "========================"
+        echo "🔍 FINAL GHCR ACCESS TEST (NO DOCKER)"
+        echo "===================================="
         
-        # 1. Проверим через Docker manifest (должно работать)
-        echo "1. Docker manifest (should work):"
-        docker manifest inspect ghcr.io/${{ github.repository }}:latest
+        # 1. Проверим через curl с разными header'ами
+        echo "1. Testing different API endpoints:"
         
-        # 2. Проверим через curl с тем же токеном
-        echo -e "\n2. Direct curl to GHCR:"
-        curl -s -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
+        echo -e "\n1.1 Direct manifest request:"
+        curl -s -o /dev/null -w "Status: %{http_code}\n" \
+          -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
           -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-          "https://ghcr.io/v2/${{ github.repository }}/manifests/latest" | head -20
+          "https://ghcr.io/v2/${{ github.repository }}/manifests/latest"
         
-        # 3. Проверим tags list
-        echo -e "\n3. Tags list:"
+        echo -e "\n1.2 Tags list:"
         curl -s -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
-          "https://ghcr.io/v2/${{ github.repository }}/tags/list" | jq .
+          "https://ghcr.io/v2/${{ github.repository }}/tags/list"
         
-        # 4. Проверим через GitHub Packages API
-        echo -e "\n4. GitHub Packages API:"
+        echo -e "\n1.3 Catalog:"
+        curl -s -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
+          "https://ghcr.io/v2/_catalog"
+        
+        # 2. Альтернативная проверка через GitHub API
+        echo -e "\n2. GitHub Packages API:"
         curl -s -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
           -H "Accept: application/vnd.github.v3+json" \
-          "https://api.github.com/user/packages?package_type=container" | jq .
+          "https://api.github.com/user/packages?package_type=container"
+        
+        # 3. Простая проверка доступности
+        echo -e "\n3. Simple availability check:"
+        if curl -s -I -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
+          "https://ghcr.io/v2/${{ github.repository }}/manifests/latest" | grep -q "200"; then
+          echo "✅ Image is accessible via GHCR API"
+        else
+          echo "❌ Image is NOT accessible via GHCR API"
+        fi
 
     
     - name: Verify image in GHCR via API
