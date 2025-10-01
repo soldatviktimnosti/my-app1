@@ -289,13 +289,15 @@ jobs:
     - name: Final verification
       run: |
         echo "🔍 Final verification..."
-        echo "=== All resources ==="
-        kubectl get all -l app=my-node-app
+        echo "=== Current status ==="
+        kubectl get deployment,svc,pods -l app=my-node-app
         
-        echo "=== Pod logs ==="
-        kubectl logs -l app=my-node-app --tail=10
+        echo "=== Logs from current running pod ==="
+        kubectl logs -l app=my-node-app --selector=status.phase=Running --tail=10
         
-        echo "🎉 Deployment successful!"
+        echo "🎉 SUCCESS! Deployment completed."
+        echo "📡 Service available at: http://10.0.2.15:3000"
+        echo "🌐 Or via NodePort: http://10.0.2.15:31962"
 
   health-check:
     runs-on: self-hosted
