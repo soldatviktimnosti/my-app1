@@ -158,6 +158,30 @@ jobs:
         curl -s -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
           "https://api.github.com/user/packages/container/${{ github.repository }}" | jq .
 
+    - name: Full token diagnostics
+      run: |
+        echo "🔍 COMPLETE TOKEN DIAGNOSTICS"
+        echo "=============================="
+        
+        # 1. Проверим какой пользователь
+        echo "1. Token user info:"
+        curl -s -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
+          "https://api.github.com/user" | jq '{login, id, type}'
+        
+        # 2. Проверим доступ к packages API
+        echo -e "\n2. Packages access:"
+        packages_response=$(curl -s -w "%{http_code}" -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
+          "https://api.github.com/user/packages")
+        echo "Packages API status: ${packages_response: -3}"
+        
+        # 3. Проверим доступ к конкретному package
+        echo -e "\n3. Specific package access:"
+        curl -s -I -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
+          "https://ghcr.io/v2/${{ github.repository }}/tags/list" | head -n 5
+        
+        # 4. Проверим через Docker manifest (альтернативный способ)
+        echo -e "\n4. Docker manifest check:"
+        docker manifest inspect ghcr.io/${{ github.repository }}:latest 2>&1 | head -20 || echo "Docker manifest failed"
     
     - name: Verify image in GHCR via API
       run: |
