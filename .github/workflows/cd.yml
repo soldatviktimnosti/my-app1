@@ -331,8 +331,8 @@ jobs:
         APP_PORT=$(kubectl get service my-node-app-service -o jsonpath="{.spec.ports[0].port}")
         
         for i in {1..30}; do
-          # Проверяем что порт открыт и принимает соединения
-          if nc -z $APP_IP $APP_PORT; then
+          # Используем bash built-in /dev/tcp
+          if timeout 5 bash -c "echo > /dev/tcp/$APP_IP/$APP_PORT" 2>/dev/null; then
             echo "✅ Application port is open and accepting connections"
             exit 0
           fi
