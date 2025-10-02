@@ -221,13 +221,13 @@ jobs:
           --namespace=default
         echo "✅ GHCR secret created"
 
-    - name: Create deployment with explicit imagePullSecrets
+    - name: Create deployment with explicit imagePullSecrets and ports
       run: |
         echo "🚀 Creating deployment..."
-        # Создаем deployment
+        # Создаем deployment с указанием порта 8080
         kubectl create deployment my-node-app --image=ghcr.io/${{ github.repository }}:latest
         
-        # Явно добавляем imagePullSecrets к deployment
+        # Добавляем imagePullSecrets
         kubectl patch deployment my-node-app -p '{
           "spec": {
             "template": {
@@ -237,7 +237,19 @@ jobs:
             }
           }
         }'
-        echo "✅ Deployment created with imagePullSecrets"
+        
+        # Добавляем объявление порта контейнера
+        kubectl patch deployment my-node-app --type='json' -p='[{
+          "op": "add",
+          "path": "/spec/template/spec/containers/0/ports",
+          "value": [
+            {
+              "containerPort": 8080,
+              "protocol": "TCP"
+            }
+          ]
+        }]'
+        echo "✅ Deployment created with port 8080"
 
     - name: Create service
       run: |
@@ -286,18 +298,47 @@ jobs:
         kubectl rollout status deployment/my-node-app --timeout=60s
         echo "✅ Rollout completed"
 
+    - name: Test application connectivity
+      run: |
+        echo "🔍 Testing application on port 8080..."
+        
+        for i in {1..10}; do
+          # Port-forward к сервису на порту 8080
+          kubectl port-forward svc/my-node-app-service 8080:8080 --address=0.0.0.0 > /dev/null 2>/dev/null &
+          PF_PID=$!
+          
+          sleep 3
+          
+          if curl -s --connect-timeout 5 "http://localhost:8080/" > /dev/null 2>&1; then
+            kill $PF_PID 2>/dev/null
+            echo "✅ Application is responding on port 8080"
+            exit 0
+          fi
+          
+          kill $PF_PID 2>/dev/null
+          echo "⏳ Testing connectivity... Attempt $i"
+          sleep 5
+        done
+        
+        echo "⚠️ Application not responding via port-forward (might be normal if no root endpoint)"
     - name: Final verification
       run: |
         echo "🔍 Final verification..."
         echo "=== Current status ==="
         kubectl get deployment,svc,pods -l app=my-node-app
         
+        echo "=== Service details ==="
+        kubectl describe service my-node-app-service | grep -E "Port|TargetPort|NodePort"
+        
+        echo "=== Pod details ==="
+        kubectl describe pod -l app=my-node-app | grep -A 10 "Containers:" | grep -E "Image|Port|Ready"
+        
         echo "=== Logs from current running pod ==="
-        kubectl logs -l app=my-node-app --selector=status.phase=Running --tail=10
+        kubectl logs -l app=my-node-app --selector=status.phase=Running --tail=10 2>/dev/null || echo "No logs available"
         
         echo "🎉 SUCCESS! Deployment completed."
-        echo "📡 Service available at: http://10.0.2.15:3000"
-        echo "🌐 Or via NodePort: http://10.0.2.15:31962"
+        echo "📡 Service available at: http://10.0.2.15:8080"
+        echo "🌐 Or via NodePort: http://10.0.2.15:$(kubectl get service my-node-app-service -o jsonpath='{.spec.ports[0].nodePort}')"
 
   health-check:
     runs-on: self-hosted
@@ -327,19 +368,28 @@ jobs:
 
     - name: Wait for application to be ready
       run: |
-        APP_IP=$(kubectl get service my-node-app-service -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
-        APP_PORT=$(kubectl get service my-node-app-service -o jsonpath="{.spec.ports[0].port}")
+        echo "🔍 Testing application on port 8080..."
         
         for i in {1..30}; do
-          # Используем bash built-in /dev/tcp
-          if timeout 5 bash -c "echo > /dev/tcp/$APP_IP/$APP_PORT" 2>/dev/null; then
-            echo "✅ Application port is open and accepting connections"
+          # Port-forward к сервису на порту 8080
+          kubectl port-forward svc/my-node-app-service 8080:8080 --address=0.0.0.0 > /dev/null 2>&1 &
+          PF_PID=$!
+          
+          sleep 3
+          
+          # Проверяем доступность на порту 8080
+          if curl -s --connect-timeout 5 "http://localhost:8080/" > /dev/null 2>&1; then
+            kill $PF_PID 2>/dev/null
+            echo "✅ Application is ready and responding on port 8080"
             exit 0
           fi
-          echo "⏳ Waiting for application port to open... Attempt $i"
+          
+          kill $PF_PID 2>/dev/null
+          echo "⏳ Waiting for application to be ready... Attempt $i"
           sleep 10
         done
-        echo "❌ Application port is not open"
+        
+        echo "❌ Application is not ready after 30 attempts"
         exit 1
 
     - name: Run smoke tests
